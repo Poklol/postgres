@@ -1,9 +1,94 @@
-Project booking_reservations { database_type: 'PostgreSQL' }
-Enum booking_status { pending confirmed cancelled completed no_show }
-Table customers { customer_id bigint [pk, increment] email text [not null, unique] full_name text [not null] phone text created_at timestamptz [not null] }
-Table locations { location_id bigint [pk, increment] name text [not null] address_line text [not null] city text [not null] country_code char(2) [not null] timezone text [not null] created_at timestamptz [not null] }
-Table resources { resource_id bigint [pk, increment] location_id bigint [not null, ref: > locations.location_id] name text [not null] resource_type text [not null] capacity int [not null] is_active boolean [not null] created_at timestamptz [not null] indexes { (location_id, name) [unique] location_id } }
-Table bookings { booking_id bigint [pk, increment] customer_id bigint [not null, ref: > customers.customer_id] resource_id bigint [not null, ref: > resources.resource_id] starts_at timestamptz [not null] ends_at timestamptz [not null] status booking_status [not null] customer_note text cancellation_reason text created_at timestamptz [not null] updated_at timestamptz [not null] indexes { (customer_id, created_at) (resource_id, starts_at) (status, starts_at) } }
-Table booking_status_history { history_id bigint [pk, increment] booking_id bigint [not null, ref: > bookings.booking_id] previous_status booking_status new_status booking_status [not null] changed_by_customer_id bigint [ref: > customers.customer_id] change_note text changed_at timestamptz [not null] }
-Table services { service_id bigint [pk, increment] name text [not null, unique] description text default_price numeric(12,2) [not null] is_active boolean [not null] }
-Table booking_services { booking_id bigint [not null, ref: > bookings.booking_id] service_id bigint [not null, ref: > services.service_id] quantity int [not null] unit_price numeric(12,2) [not null] indexes { (booking_id, service_id) [pk] service_id } }
+Project booking_reservations {
+  database_type: 'PostgreSQL'
+  Note: 'Overlap exclusion constraint is implemented in schema.sql.'
+}
+
+Enum booking_status {
+  pending
+  confirmed
+  cancelled
+  completed
+  no_show
+}
+
+Table customers {
+  customer_id bigint [pk, increment]
+  email text [not null, unique]
+  full_name text [not null]
+  phone text
+  created_at timestamptz [not null]
+}
+
+Table locations {
+  location_id bigint [pk, increment]
+  name text [not null]
+  address_line text [not null]
+  city text [not null]
+  country_code char(2) [not null]
+  timezone text [not null]
+  created_at timestamptz [not null]
+}
+
+Table resources {
+  resource_id bigint [pk, increment]
+  location_id bigint [not null, ref: > locations.location_id]
+  name text [not null]
+  resource_type text [not null]
+  capacity int [not null]
+  is_active boolean [not null]
+  created_at timestamptz [not null]
+
+  indexes {
+    (location_id, name) [unique]
+    location_id
+  }
+}
+
+Table bookings {
+  booking_id bigint [pk, increment]
+  customer_id bigint [not null, ref: > customers.customer_id]
+  resource_id bigint [not null, ref: > resources.resource_id]
+  starts_at timestamptz [not null]
+  ends_at timestamptz [not null]
+  status booking_status [not null]
+  customer_note text
+  cancellation_reason text
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (customer_id, created_at)
+    (resource_id, starts_at)
+    (status, starts_at)
+  }
+}
+
+Table booking_status_history {
+  history_id bigint [pk, increment]
+  booking_id bigint [not null, ref: > bookings.booking_id]
+  previous_status booking_status
+  new_status booking_status [not null]
+  changed_by_customer_id bigint [ref: > customers.customer_id]
+  change_note text
+  changed_at timestamptz [not null]
+}
+
+Table services {
+  service_id bigint [pk, increment]
+  name text [not null, unique]
+  description text
+  default_price numeric(12,2) [not null]
+  is_active boolean [not null]
+}
+
+Table booking_services {
+  booking_id bigint [not null, ref: > bookings.booking_id]
+  service_id bigint [not null, ref: > services.service_id]
+  quantity int [not null]
+  unit_price numeric(12,2) [not null]
+
+  indexes {
+    (booking_id, service_id) [pk]
+    service_id
+  }
+}
