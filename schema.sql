@@ -1,0 +1,20 @@
+-- Booking & Reservations schema (PostgreSQL 14+)
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+CREATE TYPE booking_status AS ENUM ('pending','confirmed','cancelled','completed','no_show');
+CREATE TABLE customers (customer_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, email TEXT NOT NULL UNIQUE, full_name TEXT NOT NULL, phone TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), CHECK (length(trim(email)) > 0), CHECK (length(trim(full_name)) > 0));
+CREATE TABLE locations (location_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name TEXT NOT NULL, address_line TEXT NOT NULL, city TEXT NOT NULL, country_code CHAR(2) NOT NULL CHECK (country_code ~ '^[A-Z]{2}$'), timezone TEXT NOT NULL DEFAULT 'UTC', created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE resources (resource_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, location_id BIGINT NOT NULL REFERENCES locations(location_id) ON DELETE RESTRICT, name TEXT NOT NULL, resource_type TEXT NOT NULL, capacity INTEGER NOT NULL DEFAULT 1 CHECK (capacity > 0), is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE(location_id,name));
+CREATE TABLE bookings (booking_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, customer_id BIGINT NOT NULL REFERENCES customers(customer_id) ON DELETE RESTRICT, resource_id BIGINT NOT NULL REFERENCES resources(resource_id) ON DELETE RESTRICT, starts_at TIMESTAMPTZ NOT NULL, ends_at TIMESTAMPTZ NOT NULL, status booking_status NOT NULL DEFAULT 'pending', customer_note TEXT, cancellation_reason TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), CHECK (ends_at > starts_at), CHECK (status <> 'cancelled' OR cancellation_reason IS NOT NULL));
+ALTER TABLE bookings ADD CONSTRAINT bookings_no_active_overlap EXCLUDE USING gist (resource_id WITH =, tstzrange(starts_at,ends_at,'[)') WITH &&) WHERE (status IN ('pending','confirmed'));
+CREATE TABLE booking_status_history (history_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, booking_id BIGINT NOT NULL REFERENCES bookings(booking_id) ON DELETE RESTRICT, previous_status booking_status, new_status booking_status NOT NULL, changed_by_customer_id BIGINT REFERENCES customers(customer_id) ON DELETE SET NULL, change_note TEXT, changed_at TIMESTAMPTZ NOT NULL DEFAULT now(), CHECK (previous_status IS NULL OR previous_status <> new_status));
+CREATE TABLE services (service_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, name TEXT NOT NULL UNIQUE, description TEXT, default_price NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (default_price >= 0), is_active BOOLEAN NOT NULL DEFAULT TRUE);
+CREATE TABLE booking_services (booking_id BIGINT NOT NULL REFERENCES bookings(booking_id) ON DELETE RESTRICT, service_id BIGINT NOT NULL REFERENCES services(service_id) ON DELETE RESTRICT, quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0), unit_price NUMERIC(12,2) NOT NULL CHECK (unit_price >= 0), PRIMARY KEY (booking_id,service_id));
+CREATE INDEX idx_resources_location_id ON resources(location_id);
+CREATE INDEX idx_bookings_customer_created ON bookings(customer_id,created_at DESC);
+CREATE INDEX idx_bookings_resource_start ON bookings(resource_id,starts_at);
+CREATE INDEX idx_bookings_status_start ON bookings(status,starts_at);
+CREATE INDEX idx_history_booking_changed ON booking_status_history(booking_id,changed_at DESC);
+CREATE INDEX idx_history_actor ON booking_status_history(changed_by_customer_id);
+CREATE INDEX idx_booking_services_service ON booking_services(service_id);
+COMMIT;
